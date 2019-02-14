@@ -1,18 +1,20 @@
 function [Old,New] = chongzhiAGC(AGC,P,Pall)
-%AGC的数值取原始数据的6871-26000(这是AGC)
-%diaodu的数值取2:00:30-7:16:45；timelength是2:00:30后每两条指令间的时间差;x是调度2:00:30按照320为起始点+时间差得到的无时标位置
-%Pall的数值取6871-26000的数据(这是Pall)
-% AGC=1;AGC
-% Pall=1;联合
-% Pdg=1;储能
-% P=1;机组出力
+% This is the file for calculating the revenue
+% AGC  AGC指令
+% Pall  联合
+% P     机组
+% Pbat  储能
+
 global day_agcresult
+%%%%%%%单独运行文件时需要加载的资料%%%%%%%%
 % clear
 % load('XFdata')
 % data=XFdata.data1215;
 % AGC=data(:,1);
 % Pall=data(:,3);
 % P=data(:,2);
+%%%%%%%单独运行文件时需要加载的资料%%%%%%%%
+
 len=length(AGC);
 Result=zeros(1,19);
 %Result=[AGC Pt0 T0 Pt1 T1 Pt2 T2 Pt3 T3 Tj Vj detP K1 K2 K3 Kp D  flag Validity];
@@ -34,13 +36,13 @@ deadzone2=Pe*0.01;%调节死区0.01,2
 % deadzone3=0.01;%指令死区
 Vn=Pe*0.015;%标准调节速度MW/min,Pe*0.015
 tn=60;%标准调节时间s
-detPn=0.008*Pe;%标准调节深度0.01*Pe(3)
+detPn=0.008*Pe;%标准调节精度0.01*Pe(3)
 scanrate=5;%扫描频率
 for i=1:scanrate:len
     if abs(AGC(i)-Result(ControlNo,1))>=2 %deadzone3*Pe %Pe*0.01
         % 当AGC当前值>记录AGC值+2(或者Pe*0.01)，表明AGC发生了动作，可能出现了一条新的AGC
         % 则需要计算上一条AGC的K值，以及判断上一条AGC指令是否有效
-        
+
         % 记录T3
         % 记录Pt3
         Result(ControlNo,8)=Pall(i-scanrate);
@@ -60,15 +62,16 @@ for i=1:scanrate:len
             Result(ControlNo,7)=Result(ControlNo,5);
         end
         % 计算调节深度D
+        % D=Pt2-Pt0+折返
         if  ControlNo~=1 && Result(ControlNo,18)*Result(ControlNo-1,18)>0 
             % 调节时候非折返
-            Result(ControlNo,17)= flag*(Result(ControlNo,8)-Result(ControlNo,2));
+            Result(ControlNo,17)= flag*(Result(ControlNo,6)-Result(ControlNo,2));
         elseif ControlNo==1
             % 第一条指令按非折返计算
-            Result(ControlNo,17)= flag*(Result(ControlNo,8)-Result(ControlNo,2));
+            Result(ControlNo,17)= flag*(Result(ControlNo,6)-Result(ControlNo,2));
         else
             % 调节时候为折返
-            Result(ControlNo,17)= flag*(Result(ControlNo,8)-Result(ControlNo,2))+Pe*0.02;
+            Result(ControlNo,17)= flag*(Result(ControlNo,6)-Result(ControlNo,2))+Pe*0.02;
         end
         % 计算上一次指令的速度Vj
         if Result(ControlNo,7)-Result(ControlNo,5)~=0
@@ -93,28 +96,28 @@ for i=1:scanrate:len
             Result(ControlNo,:)=0;
             % ControlNo=ControlNo+1;
         else
-            % 计算K3
+            %%======= 计算K3 =======%%
             % Tj=T1-T0
             % K3=(0.1,2-Tj/60)
             Result(ControlNo,10)= Result(ControlNo,5)-Result(ControlNo,3);
             Result(ControlNo,15)= max(0.1,2-Result(ControlNo,10)/tn);
-            % 计算K1
+            %%======== 计算K1 ========%%
             % K1=Vj/Vn or K1=(0.1,Vj/Vn)
             Result(ControlNo,13)= Result(ControlNo,11)/Vn;
             if Result(ControlNo,13)>4.2 %|| Result(ControlNo,13)<0.1
                 Result(ControlNo,13)=0.1;
             end
-% % %             if Result(ControlNo,11)<2*Vn
-% % %                 % 根据统计信息看Vj<2*Vn正常计算，否则为0.1
-% % %                 Result(ControlNo,13)= max(0.1,Result(ControlNo,11)/Vn);
-% % %             else
-% % %                 Result(ControlNo,13)= 0.1;
-% % %             end
-% % %            Result(ControlNo,13)= max(0.1,Result(ControlNo,13));
-% % %            if Result(ControlNo,13)>2
-% % %                Result(ControlNo,13)=2;
-% % %            end
-            % 计算K2
+%             if Result(ControlNo,11)<2*Vn
+%                 % 根据统计信息看Vj<2*Vn正常计算，否则为0.1
+%                 Result(ControlNo,13)= max(0.1,Result(ControlNo,11)/Vn);
+%             else
+%                 Result(ControlNo,13)= 0.1;
+%             end
+%            Result(ControlNo,13)= max(0.1,Result(ControlNo,13));
+%            if Result(ControlNo,13)>2
+%                Result(ControlNo,13)=2;
+%            end
+            %%======== 计算K2 ========%%
             % detp=abs(p-agc)*dt/time
             % K2=2-detp/detPn
             if Result(ControlNo,7)- Result(ControlNo,9)~=0
@@ -126,6 +129,7 @@ for i=1:scanrate:len
                 Result(ControlNo,12)=abs(Result(ControlNo,8)-Result(ControlNo,1));
             end
             Result(ControlNo,14)=max(0.1,2-Result(ControlNo,12)/detPn);
+            %%========= 计算Kp =========%%
             % 计算Kp
             Result(ControlNo,16)=Result(ControlNo,13)*Result(ControlNo,14)*Result(ControlNo,15);
             % 进行下一次的指令计算
@@ -158,7 +162,7 @@ for i=1:scanrate:len
         end
     end
     
-    %%%最后一组数据的计算%%%
+    %%%=====最后一组数据的计算=====%%%
     if i>=len-4 && i<=len
         % 记录T3
         % 记录Pt3
@@ -247,21 +251,20 @@ aveK3=mean(Result(:,15));
 aveKp=aveK1*aveK2*aveK3;
 % aveKp=aveK1*aveK2*aveK3;
 sumD=sum(Result(:,17));
-Mall=sumD*(log(aveKp)+1)*0.02;
-Mall0=sumD*aveKp*0.02;
-% RESULT=0;
+Mall=sumD*(log(aveKp)+1)*5.2;
+Mall0=sumD*aveKp*5.2;
+
 RESULT=Result(Result(:,19)>0,:);
 AVEK1=mean(RESULT(RESULT(:,13)>0,13));
-% AVEK2=mean(RESULT(:,14));
-% AVEK3=mean(RESULT(:,15));
-% AVEKp=mean(RESULT(:,16));
 if AVEK1>2.1
     AVEK1_a=AVEK1-floor(AVEK1*10)/10+2;
 else
     AVEK1_a=AVEK1;
 end
+
 AVEK2_a1=mean(RESULT(RESULT(:,13)>0,14));
 AVEK2_a=AVEK2_a1;
+
 AVEK3_a1=mean(RESULT(RESULT(:,13)>0,15));
 if AVEK3_a1>1.7
     AVEK3_a=AVEK3_a1-floor(AVEK3_a1*10)/10+1.6;
@@ -270,11 +273,9 @@ else
 end
 % aveKp=aveK1*aveK2*aveK3;
 AVEKp=AVEK3_a*AVEK2_a*AVEK1_a;
-sumD1=sum(RESULT(RESULT(:,13)>0,17));
-sum(Result(:,17))
-sum(RESULT(RESULT(:,13)>0,17))
-MALL=sumD1*(log(AVEKp)+1)*0.02;% 考核电量
-MALL0=sumD*AVEKp*0.02;% 考核电量
+sumD=sum(RESULT(:,17));
+MALL=sumD*(log(AVEKp)+1)*5.2;
+MALL0=sumD*AVEKp*5.2;
 % 考核电量
 % if aveK1<1
 %     K1kaohe=(1-aveK1)*Pe*2;
@@ -400,5 +401,5 @@ for i=1:scanrate:86400
         BatResult(CtrlNo,6)=BatResult(CtrlNo,6)+sum(Bat(i:i+4,1))/3600;%单位MWh
     end
 end
-Old=[aveK1,aveK2,aveK3,sumD,aveKp,Mall,Mall0,Eqv_Cycplus,Eqv_Cycminus];
-New=[AVEK1_a,AVEK2_a,AVEK3_a,sumD1,AVEKp,MALL,MALL0,Eqv_Cycplus,Eqv_Cycminus];
+Old=[aveK1,aveK2,aveK3,aveKp,sumD,Mall,Mall0,Eqv_Cycplus,Eqv_Cycminus];
+New=[AVEK1_a,AVEK2_a,AVEK3_a,AVEKp,sumD,MALL,MALL0,Eqv_Cycplus,Eqv_Cycminus];

@@ -1,6 +1,4 @@
 function [BatPower,status] = BatAgcMethodMX(AgcLimit,GenPower,Pall,BatSoc,Verbose)
-% function [BatPower,status] = BatAgcMethod(AgcLimit,GenPower,BatSoc,Verbose)
-%
 % 本函数旨在实现储能AGC算法，即根据AGC功率限值和机组功率求解需储能总出力并输出。
 % 输入：
 %	AgcLimit：   标量，表示AGC功率限值，由调度给定，单位：MW。
