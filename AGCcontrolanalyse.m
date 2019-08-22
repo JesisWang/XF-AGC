@@ -1,6 +1,6 @@
 clear
 load('XFdata.mat')
-data=XFdata.data1215(:,1:3);
+data=XFdata.data1203(:,1:3);
 Agc=data(:,1);% AGC指令
 P=data(:,2);% 机组出力
 Pall=data(:,3);% 联合出力
@@ -25,6 +25,7 @@ if Result(ctrlNo,1)>Result(ctrlNo,2)
 else
     Result(ctrlNo,11)=-1;
 end
+tic
 for i=1:LineMax
     if (Agc(i) > detAGC+Result(ctrlNo,1)) ||  (Agc(i) < Result(ctrlNo,1)-detAGC)
         % 新来一条指令，核算上调指令的情况
@@ -143,7 +144,7 @@ Op3=sum(Result(:,8))/N*100 % 机组调节速度小于标准调节速度的比例
 Op4=sum(Result(:,9))/N*100 % 2s内将机组出力拉至AGC指令上
 S=0;
 for i=1:N
-    if Result(i,6)==1 || Result(i,7)==1 || Result(i,8)==1 || Result(i,7)==1
+    if Result(i,6)==1 || Result(i,7)==1 || Result(i,8)==1
         M=M+1;
         if Result(i,10)==1
             S=S+1;
@@ -152,3 +153,4 @@ for i=1:N
 end
 S %代表当前储能调节策略下，在机组出力存在问题的情况下，有效调节（可获Kp值）的次数
 S/M*100  %相应比例
+toc
